@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.fernsugi/x402-api",
+  "description": "DeFi data API for AI agents — pay-per-call via x402/USDC on Base",
+  "repository": {
+    "url": "https://github.com/fernsugi/x402-api-mcp-server",
+    "source": "github"
+  },
+  "version": "1.0.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@x402-api/mcp-server",
+      "version": "1.0.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "x402 API base URL (default: https://x402-api.fly.dev)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "X402_API_BASE_URL"
+        }
+      ]
+    }
+  ]
+}
