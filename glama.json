@@ -1,0 +1,14 @@
+{
+  "name": "x402-api",
+  "description": "MCP server for pay-per-call DeFi and crypto data via x402 micropayments on Base. 8 endpoints: token prices, TVL, funding rates, token security, gas tracker, whale monitoring, wallet profiling, and yield scanning.",
+  "categories": ["Blockchain", "Cryptocurrency", "Finance"],
+  "author": {
+    "name": "Sugi",
+    "github": "fernsugi"
+  },
+  "repository": "https://github.com/fernsugi/x402-api-mcp-server",
+  "homepage": "https://x402-api.fly.dev",
+  "license": "MIT",
+  "runtime": "node",
+  "mcpVersion": "1.0"
+}

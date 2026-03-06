@@ -1,5 +1,9 @@
 # @x402-api/mcp-server
 
+<a href="https://glama.ai/mcp/servers/@fernsugi/x402-api">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@fernsugi/x402-api/badge" alt="x402-api MCP server" />
+</a>
+
 > MCP server that gives Claude, ChatGPT, and any MCP-compatible AI agent access to pay-per-call crypto/DeFi data via the [x402 protocol](https://github.com/coinbase/x402).
 
 **8 tools. No API keys. AI agents pay USDC micropayments on Base, per request.**
