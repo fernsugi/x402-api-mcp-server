@@ -1,6 +1,6 @@
-FROM node:20-alpine
+FROM node:22-slim
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --production
-COPY dist/ ./dist/
-ENTRYPOINT ["node", "dist/index.js"]
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
+COPY . .
+ENTRYPOINT ["node", "index.js"]
