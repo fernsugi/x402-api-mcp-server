@@ -8,6 +8,10 @@
 
 **8 tools. No API keys. AI agents pay USDC micropayments on Base, per request.**
 
+<a href="https://glama.ai/mcp/servers/@fernsugi/x402-api">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@fernsugi/x402-api/badge" alt="x402-api MCP server" />
+</a>
+
 ```
   ██╗  ██╗██╗  ██╗ ██████╗ ██████╗
    ╚██╗██╔╝██║  ██║██╔═══██╗╚════██╗
