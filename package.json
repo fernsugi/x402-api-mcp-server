@@ -1,6 +1,6 @@
 {
   "name": "@x402-api/mcp-server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "mcpName": "io.github.fernsugi/x402-api",
   "description": "MCP server for Sugi's x402 DeFi API \u2014 gives Claude, ChatGPT, and MCP-compatible agents access to pay-per-call crypto/DeFi data",
   "type": "module",
@@ -13,7 +13,10 @@
     "dist",
     "package.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "glama.json",
+    "server.json",
+    "Dockerfile"
   ],
   "scripts": {
     "build": "tsc",

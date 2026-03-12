@@ -32,7 +32,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, ErrorCode, McpError, } f
 // ─── Configuration ────────────────────────────────────────────────────────────
 const API_BASE_URL = process.env.X402_API_BASE_URL || 'https://x402-api.fly.dev';
 const WALLET_PRIVATE_KEY = process.env.X402_WALLET_PRIVATE_KEY;
-const SERVER_VERSION = '1.0.0';
+const SERVER_VERSION = '1.0.3';
 let _fetchFn = null;
 /**
  * Returns a fetch function that auto-handles x402 payments if a wallet
