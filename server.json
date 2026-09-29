@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.fernsugi/x402-api",
-  "description": "DeFi data API for AI agents — pay-per-call via x402/USDC on Base",
+  "description": "Eight paid DeFi tools: prices, gas, swaps, token security, holders, yields, funding and wallets",
   "repository": {
     "url": "https://github.com/fernsugi/x402-api-mcp-server",
     "source": "github"
   },
-  "version": "1.0.3",
+  "version": "1.0.4",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@x402-api/mcp-server",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "transport": {
         "type": "stdio"
       },
@@ -22,6 +22,20 @@
           "format": "string",
           "isSecret": false,
           "name": "X402_API_BASE_URL"
+        },
+        {
+          "description": "Base wallet private key for optional EIP-3009 auto-pay. Default mode inspects payment requirements without paying.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "X402_WALLET_PRIVATE_KEY"
+        },
+        {
+          "description": "Maximum USDC allowed per automatic tool call (default: 0.01)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "X402_MAX_PER_CALL_USDC"
         }
       ]
     }

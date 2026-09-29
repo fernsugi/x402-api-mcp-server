@@ -12,11 +12,10 @@
  * Two modes:
  *
  * 1. **Auto-pay mode** — Set X402_WALLET_PRIVATE_KEY env var.
- *    x402-fetch handles the payment automatically. The agent just calls
+ *    This client signs the server's Base USDC EIP-3009 challenge. The agent calls
  *    the tool and gets data.
  *
- * 2. **Manual mode** — No private key set. The tool returns 402 payment
- *    instructions so you (or the agent) can see what's needed.
+ * 2. **Inspect mode** — No private key set. The tool returns 402 requirements.
  *
  * ## Setup
  *
@@ -28,6 +27,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { randomBytes } from 'node:crypto';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
@@ -40,7 +40,8 @@ import {
 
 const API_BASE_URL = process.env.X402_API_BASE_URL || 'https://x402-api.fly.dev';
 const WALLET_PRIVATE_KEY = process.env.X402_WALLET_PRIVATE_KEY;
-const SERVER_VERSION = '1.0.3';
+const SERVER_VERSION = '1.0.4';
+const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
 // ─── x402-aware fetch ─────────────────────────────────────────────────────────
 
@@ -57,42 +58,71 @@ async function getX402Fetch(): Promise<FetchFn> {
 
   if (WALLET_PRIVATE_KEY) {
     try {
-      // Dynamic imports for optional dependencies (x402-fetch, viem)
+      // Keep viem optional so inspect mode needs no wallet dependency.
       const dynImport = new Function('m', 'return import(m)') as
         (m: string) => Promise<Record<string, unknown>>;
-
-      const x402Module = await dynImport('x402-fetch').catch(() => null);
-
-      if (x402Module?.wrapFetchWithPayment) {
-        const viemModule = await dynImport('viem');
-        const viemAccounts = await dynImport('viem/accounts');
-        const viemChains = await dynImport('viem/chains');
-
-        const privateKeyToAccount = viemAccounts['privateKeyToAccount'] as
-          (key: `0x${string}`) => { address: string };
-        const createWalletClient = viemModule['createWalletClient'] as
-          (opts: unknown) => unknown;
-        const http = viemModule['http'] as () => unknown;
-        const base = viemChains['base'];
-
-        const account = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
-        const walletClient = createWalletClient({
-          account,
-          chain: base,
-          transport: http(),
-        });
-
-        const wrapFetch = x402Module['wrapFetchWithPayment'] as
-          (fetchFn: typeof fetch, signer: unknown) => FetchFn;
-        _fetchFn = wrapFetch(fetch, walletClient);
-        process.stderr.write(`[x402-mcp] Auto-pay enabled. Wallet: ${account.address}\n`);
-        return _fetchFn!;
+      const viemAccounts = await dynImport('viem/accounts');
+      const privateKeyToAccount = viemAccounts['privateKeyToAccount'] as
+        (key: `0x${string}`) => {
+          address: string;
+          signTypedData: (data: unknown) => Promise<string>;
+        };
+      const account = privateKeyToAccount(WALLET_PRIVATE_KEY as `0x${string}`);
+      const maxPerCall = Number(process.env.X402_MAX_PER_CALL_USDC || '0.01');
+      if (!Number.isFinite(maxPerCall) || maxPerCall <= 0) {
+        throw new Error('Invalid X402_MAX_PER_CALL_USDC');
       }
+      _fetchFn = async (url, init) => {
+        const response = await fetch(url, init);
+        if (response.status !== 402) return response;
+        const challenge = await response.clone().json() as {
+          accepts?: Array<{ network: string; asset: string; payTo: string;
+            maxAmountRequired: string; extra?: { supportedProofs?: string[] } }>;
+        };
+        const offer = challenge.accepts?.find(item => item.network === 'base' &&
+          item.asset?.toLowerCase() === BASE_USDC.toLowerCase());
+        if (!offer) return response;
+        if (!offer.extra?.supportedProofs?.includes('eip3009_transferWithAuthorization')) return response;
+        if (!/^0x[0-9a-fA-F]{40}$/.test(offer.payTo)) throw new Error('Invalid payment recipient');
+        const value = BigInt(offer.maxAmountRequired);
+        if (value <= 0n || value > BigInt(Math.floor(maxPerCall * 1_000_000))) {
+          throw new Error(`Payment exceeds per-call cap of ${maxPerCall} USDC`);
+        }
+        const now = Math.floor(Date.now() / 1000);
+        const auth = {
+          from: account.address,
+          to: offer.payTo,
+          value,
+          validAfter: 0n,
+          validBefore: BigInt(now + 60),
+          nonce: `0x${randomBytes(32).toString('hex')}`,
+        };
+        const signature = await account.signTypedData({
+          domain: { name: 'USD Coin', version: '2', chainId: 8453, verifyingContract: BASE_USDC },
+          types: { TransferWithAuthorization: [
+            { name: 'from', type: 'address' }, { name: 'to', type: 'address' },
+            { name: 'value', type: 'uint256' }, { name: 'validAfter', type: 'uint256' },
+            { name: 'validBefore', type: 'uint256' }, { name: 'nonce', type: 'bytes32' },
+          ] },
+          primaryType: 'TransferWithAuthorization',
+          message: auth,
+        });
+        const payload = Buffer.from(JSON.stringify({ signature, payload: { authorization: {
+          ...auth,
+          value: value.toString(),
+          validAfter: auth.validAfter.toString(),
+          validBefore: auth.validBefore.toString(),
+        } } })).toString('base64');
+        const headers = new Headers(init?.headers);
+        headers.set('X-Payment', payload);
+        return fetch(url, { ...init, headers });
+      };
+      process.stderr.write(`[x402-mcp] Base USDC auto-pay enabled. Wallet: ${account.address}; cap ${maxPerCall} USDC/call\n`);
+      return _fetchFn;
     } catch (err) {
       process.stderr.write(
-        `[x402-mcp] Warning: X402_WALLET_PRIVATE_KEY is set but x402-fetch/viem ` +
-        `are not installed. Falling back to manual mode.\n` +
-        `  Run: npm install x402-fetch viem\n`
+        `[x402-mcp] Auto-pay unavailable: ${err instanceof Error ? err.message : String(err)}. Falling back to inspect mode.\n` +
+        `  Install viem and check the wallet key.\n`
       );
     }
   }
@@ -200,37 +230,13 @@ function formatResult(result: ApiResponse, toolName: string): string {
       message += `**Asset:** USDC (\`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\`)\n\n`;
     }
 
-    message += `### To enable automatic payments:\n\n`;
-    message += `1. Install dependencies:\n`;
-    message += `   \`\`\`bash\n   npm install x402-fetch viem\n   \`\`\`\n\n`;
-    message += `2. Set your wallet private key:\n`;
-    message += `   \`\`\`bash\n   export X402_WALLET_PRIVATE_KEY=0x...\n   \`\`\`\n\n`;
-    message += `3. Restart the MCP server.\n\n`;
-    message += `### To pay manually:\n\n`;
-    message += `1. Send USDC to the address above on Base (chain ID 8453).\n`;
-    message += `2. Encode the payment as Base64 JSON and send it as the \`X-Payment\` header:\n\n`;
-    message += `   \`\`\`js\n`;
-    message += `   // After sending the transaction on-chain:\n`;
-    message += `   const payment = Buffer.from(JSON.stringify({ txHash: "0x<your_tx_hash>", payer: "0x<your_wallet_address>" })).toString("base64");\n`;
-    message += `   // Then set the header: X-Payment: <payment>\n`;
-    message += `   \`\`\`\n\n`;
-    message += `   Or for EIP-3009 transferWithAuthorization (advanced):\n\n`;
-    message += `   \`\`\`js\n`;
-    message += `   const payment = Buffer.from(JSON.stringify({\n`;
-    message += `     signature: "0x...",\n`;
-    message += `     payload: {\n`;
-    message += `       authorization: {\n`;
-    message += `         from: "0x<your_wallet>",\n`;
-    message += `         to: "0x<payTo_address>",\n`;
-    message += `         value: "<amount_in_micro_usdc>",\n`;
-    message += `         validAfter: "0",\n`;
-    message += `         validBefore: "<unix_timestamp>",\n`;
-    message += `         nonce: "0x<random_32_bytes>"\n`;
-    message += `       }\n`;
-    message += `     }\n`;
-    message += `   })).toString("base64");\n`;
-    message += `   \`\`\`\n\n`;
-    message += `   **Note:** The \`X-Payment\` header must be Base64-encoded JSON — raw transaction hashes are not accepted.\n\n`;
+    const proofs = (first?.extra as { supportedProofs?: string[] } | undefined)?.supportedProofs || [];
+    if (proofs.includes('eip3009_transferWithAuthorization')) {
+      message += `To enable automatic payment, install viem, set X402_WALLET_PRIVATE_KEY, and restart this MCP server.\n`;
+      message += `The default per-call cap is 0.01 USDC; configure X402_MAX_PER_CALL_USDC if needed.\n\n`;
+    } else {
+      message += `This deployment does not advertise EIP-3009 settlement. Ask the API operator to configure it before paying.\n\n`;
+    }
     message += `---\n**Raw 402 response:**\n\`\`\`json\n`;
     message += JSON.stringify(result.paymentDetails, null, 2);
     message += `\n\`\`\``;
@@ -249,7 +255,7 @@ const TOOLS = [
     description:
       'Get live cryptocurrency prices and top 24h movers. Returns BTC, ETH, SOL prices plus top gainers/losers. ' +
       'Costs 0.001 USDC per call (x402 micropayment on Base). ' +
-      'Data sourced live from CoinGecko.',
+      'Data sourced live from CoinGecko or CoinLore fallback.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -271,8 +277,8 @@ const TOOLS = [
   {
     name: 'get_dex_quotes',
     description:
-      'Compare swap quotes across DEXes: Uniswap, SushiSwap, and 1inch. ' +
-      'Returns best price, price impact, liquidity, and estimated fees for each venue. ' +
+      'Get one live ParaSwap aggregate route for a supported pair. ' +
+      'Returns expected output and route components; no independent venue comparison. ' +
       'Costs 0.002 USDC per call (x402 micropayment on Base).',
     inputSchema: {
       type: 'object',
@@ -300,8 +306,8 @@ const TOOLS = [
   {
     name: 'scan_token',
     description:
-      'Perform a security scan on a token contract. Detects rug-pull risks, honeypot patterns, ' +
-      'ownership concentration, mint authority, and other red flags. ' +
+      'Read GoPlus ERC-20 security flags and a disclosed risk heuristic. ' +
+      'Unavailable metrics are null; this is not an audit. ' +
       'Costs 0.003 USDC per call (x402 micropayment on Base).',
     inputSchema: {
       type: 'object',
@@ -321,8 +327,8 @@ const TOOLS = [
   {
     name: 'track_whales',
     description:
-      'Analyze whale activity and holder concentration for a token. Returns top holders, ' +
-      'Gini coefficient, whale alerts (large recent buys/sells), and distribution breakdown. ' +
+      'Read a GoPlus sample of top ERC-20 holders and reported supply share. ' +
+      'Full distribution, Gini, and recent transfer history are unavailable. ' +
       'Costs 0.005 USDC per call (x402 micropayment on Base).',
     inputSchema: {
       type: 'object',
@@ -333,7 +339,7 @@ const TOOLS = [
         },
         chain: {
           type: 'string',
-          description: 'Chain to query (e.g. "ethereum", "base", "solana", "arbitrum"). Defaults to "ethereum".',
+          description: 'Chain to query (ethereum, base, arbitrum, polygon). Defaults to ethereum.',
         },
       },
       required: ['token'],
@@ -343,7 +349,7 @@ const TOOLS = [
     name: 'scan_yields',
     description:
       'Scan top DeFi yield opportunities across protocols: Aave, Compound, Morpho, Lido, Pendle, and more. ' +
-      'Filter by chain, asset, and minimum TVL. Returns APY, TVL, risk score, and protocol details. ' +
+      'Filter by chain, asset, and minimum TVL. Returns provider reported APY and TVL without a safety rating. ' +
       'Costs 0.005 USDC per call (x402 micropayment on Base).',
     inputSchema: {
       type: 'object',
@@ -373,9 +379,8 @@ const TOOLS = [
   {
     name: 'get_funding_rates',
     description:
-      'Get perpetual futures funding rates across 6 venues: Hyperliquid, dYdX v4, Aevo, GMX, Drift, and Vertex. ' +
-      'Returns per-8h funding rate, annualized APR, predicted rate, open interest, and next funding time for each venue. ' +
-      'Also returns ranked arbitrage opportunities (long low-rate venue, short high-rate venue) with spread in bps and annualized carry. ' +
+      'Get hourly perpetual funding rates from Hyperliquid and dYdX v4. ' +
+      'Current and predicted rates are compared as indicative spreads; fees and basis risk are excluded. ' +
       'Costs 0.008 USDC per call (x402 micropayment on Base).',
     inputSchema: {
       type: 'object',
@@ -395,9 +400,8 @@ const TOOLS = [
   {
     name: 'profile_wallet',
     description:
-      'Generate a full portfolio profile for an Ethereum/Base wallet address. ' +
-      'Returns token holdings, NFTs, DeFi positions, transaction history summary, ' +
-      'PnL estimate, and risk profile score. ' +
+      'Read priced public wallet balances and available transaction counts from Blockscout. ' +
+      'Coverage may be partial; DeFi positions, PnL, and risk score are unavailable. ' +
       'Costs 0.008 USDC per call (x402 micropayment on Base).',
     inputSchema: {
       type: 'object',
@@ -536,8 +540,8 @@ async function main() {
   await server.connect(transport);
 
   const payMode = WALLET_PRIVATE_KEY
-    ? 'AUTO-PAY (x402-fetch)'
-    : 'MANUAL (returns 402 payment instructions)';
+    ? 'AUTO-PAY CONFIGURED (Base USDC EIP-3009)'
+    : 'INSPECT (returns 402 payment requirements)';
 
   process.stderr.write(
     `[x402-mcp] Server started\n` +

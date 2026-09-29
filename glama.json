@@ -1,6 +1,6 @@
 {
   "name": "x402-api",
-  "description": "MCP server for pay-per-call DeFi and crypto data via x402 micropayments on Base. 8 endpoints: token prices, TVL, funding rates, token security, gas tracker, whale monitoring, wallet profiling, and yield scanning.",
+  "description": "Eight pay-per-call crypto and DeFi tools via x402 USDC on Base: live prices, gas, ParaSwap quote, GoPlus security and top holders, DefiLlama yields, Hyperliquid/dYdX funding, and observed wallet balances.",
   "categories": ["Blockchain", "Cryptocurrency", "Finance"],
   "author": {
     "name": "Sugi",

@@ -8,6 +8,8 @@
 
 **8 tools. No API keys. AI agents pay USDC micropayments on Base, per request.**
 
+**Find this service:** [Official MCP Registry](https://registry.modelcontextprotocol.io/?q=io.github.fernsugi%2Fx402-api) · [Glama](https://glama.ai/mcp/servers/fernsugi/x402-api-mcp-server) · [Agent discovery manifest](https://x402-api.fly.dev/.well-known/x402) · [OpenAPI](https://x402-api.fly.dev/openapi.json). The API's new discovery URLs need a server deployment before those links work publicly.
+
 ```
   ██╗  ██╗██╗  ██╗ ██████╗ ██████╗
    ╚██╗██╔╝██║  ██║██╔═══██╗╚════██╗
@@ -23,12 +25,12 @@
 |------|-------------|------|-------------|
 | `get_crypto_prices` | `GET /api/price-feed` | 0.001 USDC | BTC/ETH/SOL + top 24h movers |
 | `get_gas_prices` | `GET /api/gas-tracker` | 0.001 USDC | Multi-chain gas (ETH, Base, Polygon, Arbitrum) |
-| `get_dex_quotes` | `GET /api/dex-quotes` | 0.002 USDC | Swap quotes: Uniswap, SushiSwap, 1inch |
-| `scan_token` | `GET /api/token-scanner` | 0.003 USDC | Token security scan + rug-pull detection |
-| `track_whales` | `GET /api/whale-tracker` | 0.005 USDC | Holder concentration + whale alerts |
-| `scan_yields` | `GET /api/yield-scanner` | 0.005 USDC | DeFi yields: Aave, Compound, Morpho, Lido, Pendle |
-| `get_funding_rates` | `GET /api/funding-rates` | 0.008 USDC | Perp funding rates across 6 venues |
-| `profile_wallet` | `GET /api/wallet-profiler` | 0.008 USDC | Full wallet portfolio + risk profile |
+| `get_dex_quotes` | `GET /api/dex-quotes` | 0.002 USDC | One ParaSwap aggregate route |
+| `scan_token` | `GET /api/token-scanner` | 0.003 USDC | GoPlus security flags and heuristic |
+| `track_whales` | `GET /api/whale-tracker` | 0.005 USDC | Top-holder sample and supply share |
+| `scan_yields` | `GET /api/yield-scanner` | 0.005 USDC | DefiLlama pool APYs and TVL |
+| `get_funding_rates` | `GET /api/funding-rates` | 0.008 USDC | Hyperliquid and dYdX hourly rates |
+| `profile_wallet` | `GET /api/wallet-profiler` | 0.008 USDC | Observed Blockscout balances; partial coverage |
 
 ---
 
@@ -50,12 +52,12 @@ Install optional payment deps and set your wallet key:
 
 ```bash
 npm install -g @x402-api/mcp-server
-npm install -g x402-fetch viem
+npm install -g viem
 export X402_WALLET_PRIVATE_KEY=0x<your_private_key>
 x402-api-mcp
 ```
 
-The server will auto-pay 402 responses using USDC on Base. **Make sure your wallet has USDC on Base mainnet.**
+The MCP server signs Base USDC EIP-3009 authorizations only when the API advertises that settlement mode. The default payment cap is 0.01 USDC per call. Fund the wallet with USDC on Base; the API operator sponsors gas in direct settlement mode.
 
 ---
 
@@ -103,7 +105,8 @@ Add to your `claude_desktop_config.json`:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `X402_WALLET_PRIVATE_KEY` | Optional | Private key for auto-pay (e.g. `0x...`). If set, x402-fetch handles payments automatically. |
+| `X402_WALLET_PRIVATE_KEY` | Optional | Base wallet private key for EIP-3009 automatic payment. Requires `viem`. |
+| `X402_MAX_PER_CALL_USDC` | Optional | Per-call cap, default `0.01` USDC. |
 | `X402_API_BASE_URL` | Optional | Override API URL (default: `https://x402-api.fly.dev`) |
 
 ---
@@ -114,8 +117,8 @@ This API uses the [x402 protocol](https://github.com/coinbase/x402) — HTTP 402
 
 1. **Agent calls tool** → MCP server makes API request
 2. **Server returns 402** with payment details (amount, USDC address, Base network)
-3. **Auto-pay mode:** x402-fetch signs and submits payment, retries request automatically
-4. **Manual mode:** MCP returns 402 details so user/agent can arrange payment
+3. **Auto-pay mode:** this client signs an EIP-3009 authorization and retries; the API settles it on Base
+4. **Inspect mode:** MCP returns 402 details without signing or paying
 
 **Payment details:**
 - Token: USDC on Base mainnet
@@ -166,7 +169,7 @@ Cost: 0.003 USDC
 ```
 
 ### `track_whales`
-Whale tracking — holder concentration, Gini coefficient, recent large moves.
+Top-holder sample from GoPlus. Gini and recent transfer history unavailable.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -189,7 +192,7 @@ Cost: 0.005 USDC
 ```
 
 ### `get_funding_rates`
-Perpetual funding rates across Binance, OKX, Bybit, dYdX, GMX, Hyperliquid.
+Hourly perpetual funding from Hyperliquid and dYdX v4. Spreads are indicative.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -200,7 +203,7 @@ Cost: 0.008 USDC
 ```
 
 ### `profile_wallet`
-Full wallet portfolio analysis — holdings, DeFi positions, activity, PnL, risk score.
+Observed priced wallet balances and available transaction counts. DeFi positions, PnL and risk score unavailable.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

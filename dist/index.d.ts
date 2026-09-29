@@ -12,11 +12,10 @@
  * Two modes:
  *
  * 1. **Auto-pay mode** — Set X402_WALLET_PRIVATE_KEY env var.
- *    x402-fetch handles the payment automatically. The agent just calls
+ *    This client signs the server's Base USDC EIP-3009 challenge. The agent calls
  *    the tool and gets data.
  *
- * 2. **Manual mode** — No private key set. The tool returns 402 payment
- *    instructions so you (or the agent) can see what's needed.
+ * 2. **Inspect mode** — No private key set. The tool returns 402 requirements.
  *
  * ## Setup
  *
