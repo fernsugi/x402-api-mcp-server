@@ -6,12 +6,12 @@
     "url": "https://github.com/fernsugi/x402-api-mcp-server",
     "source": "github"
   },
-  "version": "1.0.4",
+  "version": "1.0.5",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@x402-api/mcp-server",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "transport": {
         "type": "stdio"
       },
@@ -36,6 +36,20 @@
           "format": "string",
           "isSecret": false,
           "name": "X402_MAX_PER_CALL_USDC"
+        },
+        {
+          "name": "X402_REFERRAL_SOURCE",
+          "description": "Optional referral label: github, glama, nohumans, bazaar, mcp, eliza, demo or test. Default mcp.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "X402_EXPECTED_PAY_TO",
+          "description": "Expected payment recipient; defaults to the official x402-api wallet. Change only when using a trusted alternative deployment.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
         }
       ]
     }
