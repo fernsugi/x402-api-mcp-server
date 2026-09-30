@@ -21,18 +21,24 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Confirm matching npm version exists
+      - name: Confirm npm version and skip an existing Registry release
+        id: preflight
         run: |
           node --input-type=module <<'JS'
-          import { readFileSync } from 'node:fs';
+          import { readFileSync, appendFileSync } from 'node:fs';
           const server = JSON.parse(readFileSync('server.json'));
           const pkg = server.packages.find(x => x.registryType === 'npm');
           if (server.name !== 'io.github.fernsugi/x402-api' || pkg.identifier !== '@x402-api/mcp-server' || pkg.version !== server.version) throw new Error('Unexpected registry metadata');
           const response = await fetch('https://registry.npmjs.org/' + encodeURIComponent(pkg.identifier) + '/' + encodeURIComponent(pkg.version));
           if (!response.ok || (await response.json()).version !== pkg.version) throw new Error('Publish matching npm version first');
           console.log('npm version confirmed:', pkg.version);
+          const registry = await fetch('https://registry.modelcontextprotocol.io/v0.1/servers/' + encodeURIComponent(server.name) + '/versions/' + encodeURIComponent(server.version));
+          if (![200, 404].includes(registry.status)) throw new Error('Registry lookup unavailable');
+          if (registry.status === 200 && (await registry.json()).server.version !== server.version) throw new Error('Unexpected Registry response');
+          appendFileSync(process.env.GITHUB_OUTPUT, 'already_published=' + (registry.status === 200) + '\n');
           JS
       - name: Check out official publisher source
+        if: steps.preflight.outputs.already_published != 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: modelcontextprotocol/registry
@@ -40,14 +46,17 @@ jobs:
           path: .publisher
           persist-credentials: false
       - name: Set up publisher Go toolchain
+        if: steps.preflight.outputs.already_published != 'true'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: .publisher/go.mod
           cache: false
       - name: Build the pinned official publisher
+        if: steps.preflight.outputs.already_published != 'true'
         working-directory: .publisher
         run: go build -o "$RUNNER_TEMP/mcp-publisher" ./cmd/publisher
       - name: Validate and publish using GitHub OIDC
+        if: steps.preflight.outputs.already_published != 'true'
         run: |
           "$RUNNER_TEMP/mcp-publisher" validate
           "$RUNNER_TEMP/mcp-publisher" login github-oidc
