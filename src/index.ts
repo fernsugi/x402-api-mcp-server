@@ -40,7 +40,9 @@ import {
 
 const API_BASE_URL = process.env.X402_API_BASE_URL || 'https://x402-api.fly.dev';
 const WALLET_PRIVATE_KEY = process.env.X402_WALLET_PRIVATE_KEY;
-const SERVER_VERSION = '1.0.4';
+const SERVER_VERSION = '1.0.5';
+const REFERRAL_SOURCE = ['github', 'glama', 'nohumans', 'bazaar', 'mcp', 'eliza', 'demo', 'test'].includes(process.env.X402_REFERRAL_SOURCE || '') ? process.env.X402_REFERRAL_SOURCE! : 'mcp';
+const EXPECTED_PAY_TO = (process.env.X402_EXPECTED_PAY_TO || '0x60264c480b67adb557efEd22Cf0e7ceA792DefB7').toLowerCase();
 const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
 // ─── x402-aware fetch ─────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ async function getX402Fetch(): Promise<FetchFn> {
           item.asset?.toLowerCase() === BASE_USDC.toLowerCase());
         if (!offer) return response;
         if (!offer.extra?.supportedProofs?.includes('eip3009_transferWithAuthorization')) return response;
-        if (!/^0x[0-9a-fA-F]{40}$/.test(offer.payTo)) throw new Error('Invalid payment recipient');
+        if (!/^0x[0-9a-fA-F]{40}$/.test(offer.payTo) || offer.payTo.toLowerCase() !== EXPECTED_PAY_TO) throw new Error('Unexpected payment recipient');
         const value = BigInt(offer.maxAmountRequired);
         if (value <= 0n || value > BigInt(Math.floor(maxPerCall * 1_000_000))) {
           throw new Error(`Payment exceeds per-call cap of ${maxPerCall} USDC`);
@@ -162,6 +164,7 @@ async function callApi(
       headers: {
         'Accept': 'application/json',
         'User-Agent': `x402-api-mcp/${SERVER_VERSION}`,
+        'X-X402-Source': REFERRAL_SOURCE,
       },
       signal: controller.signal,
     });
@@ -436,7 +439,7 @@ const server = new Server(
 
 // List tools handler
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: TOOLS,
+  tools: TOOLS.map(tool => ({ ...tool, annotations: { readOnlyHint: !WALLET_PRIVATE_KEY, destructiveHint: false, idempotentHint: !WALLET_PRIVATE_KEY, openWorldHint: true } })),
 }));
 
 // Call tool handler

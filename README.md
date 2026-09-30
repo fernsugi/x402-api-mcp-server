@@ -8,7 +8,7 @@
 
 **8 tools. No API keys. AI agents pay USDC micropayments on Base, per request.**
 
-**Find this service:** [Official MCP Registry](https://registry.modelcontextprotocol.io/?q=io.github.fernsugi%2Fx402-api) · [Glama](https://glama.ai/mcp/servers/fernsugi/x402-api-mcp-server) · [Agent discovery manifest](https://x402-api.fly.dev/.well-known/x402) · [OpenAPI](https://x402-api.fly.dev/openapi.json). The API's new discovery URLs need a server deployment before those links work publicly.
+**Find this service:** [Official MCP Registry](https://registry.modelcontextprotocol.io/?q=io.github.fernsugi%2Fx402-api) · [Glama](https://glama.ai/mcp/servers/fernsugi/x402-api-mcp-server) · [Agent discovery manifest](https://x402-api.fly.dev/.well-known/x402) · [OpenAPI](https://x402-api.fly.dev/openapi.json).
 
 ```
   ██╗  ██╗██╗  ██╗ ██████╗ ██████╗
@@ -145,7 +145,7 @@ Cost: 0.001 USDC
 ```
 
 ### `get_dex_quotes`
-Compare swap quotes across DEXes.
+Get one ParaSwap aggregate route. No independent comparison between DEX venues.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -247,3 +247,19 @@ node dist/index.js
 ## License
 
 MIT
+
+## Three runnable workflows
+
+| Workflow | Tools | Total USDC |
+|---|---|---:|
+| [Token check](https://x402-api.fly.dev/demos/token-check.html?utm_source=github&utm_campaign=token-check) | `scan_token` + `track_whales` | 0.008 |
+| [ETH funding](https://x402-api.fly.dev/demos/funding-compare.html?utm_source=github&utm_campaign=funding-compare) | `get_funding_rates` | 0.008 |
+| [Swap quote + gas](https://x402-api.fly.dev/demos/swap-cost.html?utm_source=github&utm_campaign=swap-cost) | `get_dex_quotes` + `get_gas_prices` | 0.003 |
+
+[Runnable Node examples](https://github.com/fernsugi/x402-api-server/tree/main/examples) start in inspect mode. Each demo has inputs, recorded provider output, coverage limits, a spending cap, and an agent prompt.
+
+Optional `X402_REFERRAL_SOURCE` labels requests for first-party aggregate attribution (default `mcp`). It is a hint, not verified caller identity. The API journals no raw payer wallets, IP addresses, or signatures. `X402_EXPECTED_PAY_TO` pins the payment recipient to the official wallet by default. Tools advertise that auto-pay can spend money and repeated calls can incur another charge.
+
+### Cursor / other local MCP clients
+
+Use the same `mcpServers` configuration shown above. For Cursor, put it in `.cursor/mcp.json` in your project. Inspect mode needs no wallet. Set `X402_MAX_PER_CALL_USDC` before enabling auto-pay; repeated calls spend again. Keep wallet credentials in local environment settings, outside Git.
