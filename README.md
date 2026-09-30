@@ -263,3 +263,7 @@ Optional `X402_REFERRAL_SOURCE` labels requests for first-party aggregate attrib
 ### Cursor / other local MCP clients
 
 Use the same `mcpServers` configuration shown above. For Cursor, put it in `.cursor/mcp.json` in your project. Inspect mode needs no wallet. Set `X402_MAX_PER_CALL_USDC` before enabling auto-pay; repeated calls spend again. Keep wallet credentials in local environment settings, outside Git.
+
+## Registry publication
+
+The `Publish MCP Registry` GitHub workflow validates the matching npm version, then publishes `server.json` using GitHub OIDC. It runs on a published GitHub release or a manual dispatch from main. No npm token, GitHub PAT, or wallet key is stored in CI. Actions and official publisher source are pinned to verified commits. npm publication still happens separately before creating the release.
